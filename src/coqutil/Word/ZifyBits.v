@@ -311,7 +311,28 @@ Ltac zify_bits_fold_literal_mods :=
              end end
          end.
 
-Ltac zify_bits_pre := zify_bits_shamt; zify_bits_fold.
+(* A width with no instance (a variable width without a [Bitwidth] split, or an
+   unregistered literal): the one fact that matters most is the range, which the
+   instances give through [InjTyp] for registered widths.  Pose it once per
+   occurrence of [Zmod.unsigned x], as ZnWords's dewordify does; [0 <= w] comes
+   from the context ([lia]). *)
+Ltac zify_bits_abstract_ranges :=
+  repeat match goal with
+         | H : context [@Zmod.unsigned (2 ^ ?w) ?x] |- _ => zify_bits_abstract_range_at w x
+         | |- context [@Zmod.unsigned (2 ^ ?w) ?x] => zify_bits_abstract_range_at w x
+         end
+with zify_bits_abstract_range_at w x :=
+  lazymatch isZcst w with
+  | true => fail
+  | false =>
+      lazymatch goal with
+      | _ : 0 <= @Zmod.unsigned (2 ^ w) x < 2 ^ w |- _ => fail
+      | _ => let Hw := fresh in assert (Hw : 0 <= w) by lia;
+             pose proof (bits.unsigned_range x Hw : 0 <= @Zmod.unsigned (2 ^ w) x < 2 ^ w); clear Hw
+      end
+  end.
+
+Ltac zify_bits_pre := zify_bits_shamt; zify_bits_abstract_ranges; zify_bits_fold.
 Ltac zify_bits_post := autounfold with zify_bits_width in *; zify_bits_fold_literal_mods.
 
 (* A [Bitwidth width] hypothesis on a variable width: case split so that the
