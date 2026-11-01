@@ -123,3 +123,23 @@ Proof.
   lazymatch goal with |- context [2 ^ Width32.width] => fail "width constant left" | _ => idtac end.
   unfold my_width in *. lia.
 Qed.
+
+(* The clearing tactics only clear; the goal stays provable when it depends on
+   a word through a bridging equation, and unrelated words go away. *)
+Goal forall (x y z : bits 32) (n : Z) (l : list Z) (P : Prop),
+  P -> List.length l = 3%nat -> n = Zmod.unsigned x -> Zmod.unsigned x < Zmod.unsigned y ->
+  Zmod.unsigned z = 7 -> n < 2 ^ 32.
+Proof.
+  intros. clear_unrelated_words.
+  lazymatch goal with H : Zmod.unsigned z = 7 |- _ => fail "unrelated word fact kept" | _ => idtac end.
+  lazymatch goal with H : n = Zmod.unsigned x |- _ => idtac end.
+  lazymatch goal with H : Zmod.unsigned x < Zmod.unsigned y |- _ => idtac end.
+  clear_non_arith.
+  lazymatch goal with H : P |- _ => fail "non-arithmetic fact kept" | _ => idtac end.
+  lazymatch goal with H : List.length l = 3%nat |- _ => idtac end.
+  lia.
+Qed.
+Goal forall (x : bits 32) (n : Z), Zmod.unsigned x = n -> 0 <= n -> n < 2 ^ 32.
+Proof. intros. clear_for_lia. lia. Qed.
+Goal forall (x : bits 32) (n : Z), Zmod.unsigned x = n -> 0 <= n -> n < 2 ^ 32.
+Proof. intros. clear_words_if_goal_has_none. Fail lia. Abort.
