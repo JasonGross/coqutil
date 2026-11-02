@@ -21,6 +21,13 @@
    driven by the [ZifyBitsFold] instances that the functor declares, so no
    central list of widths is needed anywhere in the tactics.
 
+   The instances are only defined here; [ZifyBitsAll] registers them with zify
+   per width, in plain modules with [#[export] Add Zify], so that they are
+   active only where a file imports them ([Import ZifyBitsAll.Instances]): a
+   plain [lia] elsewhere is unchanged.  ([#[export] Add Zify] inside a functor
+   instance is not replayed by [Import]; that is why the registrations are not
+   in the functor.)
+
    [bits_lia] runs these steps itself.  [ZifyBitsHooks] installs them as the
    zify hooks, so that plain [lia] sees words too; that is opt-in because an
    explicit [zify] in an existing proof then also translates word equalities. *)
@@ -50,24 +57,18 @@ Create HintDb zify_bits_width discriminated.
    (none of them is registered by the stdlib). *)
 #[global] Instance Op_Z_shiftl : BinOp Z.shiftl :=
   { TBOp := Z.shiftl; TBOpInj := fun _ _ => eq_refl }.
-Add Zify BinOp Op_Z_shiftl.
 #[global] Instance ZshiftlSpec : BinOpSpec Z.shiftl :=
   { BPred := fun x n r => 0 <= n -> r = x * 2 ^ n; BSpec := Z.shiftl_mul_pow2 }.
-Add Zify BinOpSpec ZshiftlSpec.
 
 #[global] Instance Op_Z_shiftr : BinOp Z.shiftr :=
   { TBOp := Z.shiftr; TBOpInj := fun _ _ => eq_refl }.
-Add Zify BinOp Op_Z_shiftr.
 #[global] Instance ZshiftrSpec : BinOpSpec Z.shiftr :=
   { BPred := fun x n r => 0 <= n -> r = x / 2 ^ n; BSpec := Z.shiftr_div_pow2 }.
-Add Zify BinOpSpec ZshiftrSpec.
 
 #[global] Instance Op_Z_ones : UnOp Z.ones :=
   { TUOp := Z.ones; TUOpInj := fun _ => eq_refl }.
-Add Zify UnOp Op_Z_ones.
 #[global] Instance ZonesSpec : UnOpSpec Z.ones :=
   { UPred := fun n r => r = 2 ^ n - 1; USpec := Z.ones_equiv }.
-Add Zify UnOpSpec ZonesSpec.
 
 (* A shift amount [k] below the width is unchanged by the masking to
    [Z.log2 width] bits that bedrock2's semantics apply (coqutil's
@@ -111,16 +112,13 @@ Module ZifyBits (W : ZifyBitsWidth).
 
   #[global] Instance Inj_word_Z : InjTyp word Z :=
     mkinj _ _ unsigned (fun x => 0 <= x < m) unsigned_range.
-  Add Zify InjTyp Inj_word_Z.
 
   Lemma eq_iff (x y : word) : x = y <-> unsigned x = unsigned y.
   Proof. symmetry. apply Zmod.unsigned_inj_iff. Qed.
   #[global] Instance Op_eq : BinRel (@eq word) := { TR := @eq Z; TRInj := eq_iff }.
-  Add Zify BinRel Op_eq.
 
   #[global] Instance Op_unsigned : UnOp unsigned :=
     { TUOp := fun x => x; TUOpInj := fun _ => eq_refl }.
-  Add Zify UnOp Op_unsigned.
 
   (* [signed] without [2 ^ (width - 1)]: [2 * x / m] is 0 or 1 on the range. *)
   Lemma signed_spec (x : word) : Zmod.signed x = unsigned x - m * (2 * unsigned x / m).
@@ -138,73 +136,58 @@ Module ZifyBits (W : ZifyBitsWidth).
   Qed.
   #[global] Instance Op_signed : UnOp (@Zmod.signed m) :=
     { TUOp := fun x => x - m * (2 * x / m); TUOpInj := signed_spec }.
-  Add Zify UnOp Op_signed.
 
   #[global] Instance Op_of_Z : UnOp (Zmod.of_Z m) :=
     { TUOp := fun z => z mod m; TUOpInj := @Zmod.unsigned_of_Z m }.
-  Add Zify UnOp Op_of_Z.
 
   #[global] Instance Op_zero : CstOp (@Zmod.zero m) :=
     { TCst := 0; TCstInj := Zmod.unsigned_0 m }.
-  Add Zify CstOp Op_zero.
 
   Lemma one_spec : unsigned Zmod.one = 1.
   Proof. apply bits.unsigned_1. pose proof W.width_pos. lia. Qed.
   #[global] Instance Op_one : CstOp (@Zmod.one m) := { TCst := 1; TCstInj := one_spec }.
-  Add Zify CstOp Op_one.
 
   #[global] Instance Op_add : BinOp (@Zmod.add m) :=
     { TBOp := fun x y => (x + y) mod m; TBOpInj := @Zmod.unsigned_add m }.
-  Add Zify BinOp Op_add.
 
   #[global] Instance Op_sub : BinOp (@Zmod.sub m) :=
     { TBOp := fun x y => (x - y) mod m; TBOpInj := @Zmod.unsigned_sub m }.
-  Add Zify BinOp Op_sub.
 
   #[global] Instance Op_mul : BinOp (@Zmod.mul m) :=
     { TBOp := fun x y => (x * y) mod m; TBOpInj := @Zmod.unsigned_mul m }.
-  Add Zify BinOp Op_mul.
 
   #[global] Instance Op_opp : UnOp (@Zmod.opp m) :=
     { TUOp := fun x => (- x) mod m; TUOpInj := @Zmod.unsigned_opp m }.
-  Add Zify UnOp Op_opp.
 
   (* Bitwise operations stay atoms; the [mod m] gives lia their range. *)
   #[global] Instance Op_and : BinOp (@Zmod.and m) :=
     { TBOp := fun x y => Z.land x y mod m; TBOpInj := @Zmod.unsigned_and m }.
-  Add Zify BinOp Op_and.
 
   Lemma or_spec (x y : word) : unsigned (Zmod.or x y) = Z.lor (unsigned x) (unsigned y) mod m.
   Proof. apply Zmod.unsigned_of_Z. Qed.
   #[global] Instance Op_or : BinOp (@Zmod.or m) :=
     { TBOp := fun x y => Z.lor x y mod m; TBOpInj := or_spec }.
-  Add Zify BinOp Op_or.
 
   Lemma xor_spec (x y : word) : unsigned (Zmod.xor x y) = Z.lxor (unsigned x) (unsigned y) mod m.
   Proof. apply Zmod.unsigned_of_Z. Qed.
   #[global] Instance Op_xor : BinOp (@Zmod.xor m) :=
     { TBOp := fun x y => Z.lxor x y mod m; TBOpInj := xor_spec }.
-  Add Zify BinOp Op_xor.
 
   #[global] Instance Op_ndn : BinOp (@Zmod.ndn m) :=
     { TBOp := fun x y => Z.ldiff x y mod m; TBOpInj := @Zmod.unsigned_ndn m }.
-  Add Zify BinOp Op_ndn.
 
   Lemma not_spec (x : word) : unsigned (Zmod.not x) = (- unsigned x - 1) mod m.
   Proof. cbv [unsigned Zmod.not Z.lnot]. rewrite Zmod.unsigned_of_Z. f_equal; lia. Qed.
   #[global] Instance Op_not : UnOp (@Zmod.not m) :=
     { TUOp := fun x => (- x - 1) mod m; TUOpInj := not_spec }.
-  Add Zify UnOp Op_not.
 
   #[global] Instance Op_slu : BinOp (@Zmod.slu m) :=
     { TBOp := fun x n => Z.shiftl x n mod m; TBOpInj := @Zmod.unsigned_slu m }.
-  Add Zify BinOp Op_slu.
 
   Lemma sru_spec (x : word) n : unsigned (Zmod.sru x n) = Z.shiftr (unsigned x) n mod m.
   Proof. apply Zmod.unsigned_of_Z. Qed.
   #[global] Instance Op_sru : BinOp (@Zmod.sru m) :=
     { TBOp := fun x n => Z.shiftr x n mod m; TBOpInj := sru_spec }.
-  Add Zify BinOp Op_sru.
 
   Lemma srs_spec (x : word) n :
     unsigned (Zmod.srs x n) = Z.shiftr (unsigned x - m * (2 * unsigned x / m)) n mod m.
@@ -214,11 +197,9 @@ Module ZifyBits (W : ZifyBitsWidth).
   Qed.
   #[global] Instance Op_srs : BinOp (@Zmod.srs m) :=
     { TBOp := fun x n => Z.shiftr (x - m * (2 * x / m)) n mod m; TBOpInj := srs_spec }.
-  Add Zify BinOp Op_srs.
 
   #[global] Instance Op_umod : BinOp (@Zmod.umod m) :=
     { TBOp := fun x y => x mod y; TBOpInj := @Zmod.unsigned_umod m }.
-  Add Zify BinOp Op_umod.
 
   (* [udiv] by zero is [m - 1]: folded into a Z-level function with a spec
      (a [BinOpSpec] key must be a constant applied to exactly two arguments). *)
@@ -237,17 +218,14 @@ Module ZifyBits (W : ZifyBitsWidth).
       apply Z.div_le_upper_bound; [lia|]. nia.
   Qed.
   #[global] Instance Op_udiv : BinOp (@Zmod.udiv m) := { TBOp := Zudiv; TBOpInj := udiv_spec }.
-  Add Zify BinOp Op_udiv.
   Lemma Zudiv_cases a b : (b = 0 /\ Zudiv a b = m - 1) \/ (b <> 0 /\ Zudiv a b = a / b).
   Proof. cbv [Zudiv]. destruct (Z.eqb_spec b 0); auto. Qed.
   #[global] Instance ZudivSpec : BinOpSpec Zudiv :=
     { BPred := fun a b r => (b = 0 /\ r = m - 1) \/ (b <> 0 /\ r = a / b); BSpec := Zudiv_cases }.
-  Add Zify BinOpSpec ZudivSpec.
 
   Lemma eqb_spec (x y : word) : eqb x y = Z.eqb (unsigned x) (unsigned y).
   Proof. reflexivity. Qed.
   #[global] Instance Op_eqb : BinOp eqb := { TBOp := Z.eqb; TBOpInj := eqb_spec }.
-  Add Zify BinOp Op_eqb.
 End ZifyBits.
 
 (* Width-generic tactics, driven by the [ZifyBitsFold] registry. *)

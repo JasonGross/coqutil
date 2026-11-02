@@ -4,5 +4,6 @@
    proof then also translates word equalities, which can change the proof's
    context (one proof in bedrock2Examples/lightbulb.v does this). *)
 Require Export coqutil.Word.ZifyBitsAll.
+Export ZifyBitsAll.Instances.
 Ltac Zify.zify_pre_hook ::= zify_bits_pre.
 Ltac Zify.zify_post_hook ::= zify_bits_post.
