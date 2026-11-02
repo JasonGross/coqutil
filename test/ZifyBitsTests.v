@@ -1,5 +1,6 @@
 From Stdlib Require Import ZArith Lia.
 Require Import coqutil.Word.ZifyBitsAll.
+Import ZifyBitsAll.Instances.
 Require Import coqutil.Word.Bitwidth.
 Local Open Scope Z_scope.
 
